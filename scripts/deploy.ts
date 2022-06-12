@@ -1,29 +1,43 @@
-// We require the Hardhat Runtime Environment explicitly here. This is optional
-// but useful for running the script in a standalone fashion through `node <script>`.
-//
-// When running the script with `npx hardhat run <script>` you'll find the Hardhat
-// Runtime Environment's members available in the global scope.
-import { ethers } from "hardhat";
+// imports
+import { ethers, run, network } from "hardhat";
 
+// async main
 async function main() {
-  // Hardhat always runs the compile task when running scripts with its command
-  // line interface.
-  //
-  // If this script is run directly using `node` you may want to call compile
-  // manually to make sure everything is compiled
-  // await hre.run('compile');
+  const simpleStorageFactory = await ethers.getContractFactory("SimpleStorage");
+  const simpleStorage = await simpleStorageFactory.deploy();
+  await simpleStorage.deployed();
+  console.log(`Contract deployed to ${simpleStorage.address}`);
 
-  // We get the contract to deploy
-  const Greeter = await ethers.getContractFactory("Greeter");
-  const greeter = await Greeter.deploy("Hello, Hardhat!");
+  if (network.config.chainId === 4 && process.env.ETHERSCAN_API_KEY) {
+    await simpleStorage.deployTransaction.wait(6);
+    await verify(simpleStorage.address, []);
+  }
 
-  await greeter.deployed();
-
-  console.log("Greeter deployed to:", greeter.address);
+  const currentValue = await simpleStorage.retrieve();
+  console.log(`Current Value is ${currentValue}`);
+  const transactionResponse = await simpleStorage.store(7);
+  await transactionResponse.wait(1);
+  const updatedValue = await simpleStorage.retrieve();
+  console.log(`Updated Value is ${updatedValue}`);
 }
 
-// We recommend this pattern to be able to use async/await everywhere
-// and properly handle errors.
+async function verify(contractAddress: string, args: any[]) {
+  console.log("Verifying Contract....");
+  try {
+    await run("verify:verify", {
+      address: contractAddress,
+      constructorArgs: args,
+    });
+  } catch (error: any) {
+    if (error.message.toLowerCase().includes("already verified")) {
+      console.log("Already verified");
+    } else {
+      console.log(error);
+    }
+  }
+}
+
+// main
 main().catch((error) => {
   console.error(error);
   process.exitCode = 1;
